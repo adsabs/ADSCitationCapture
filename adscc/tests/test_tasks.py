@@ -4,6 +4,7 @@ import json
 
 import unittest
 from adscc import app, tasks
+from mock import patch
 
 
 class TestWorkers(unittest.TestCase):
@@ -25,6 +26,12 @@ class TestWorkers(unittest.TestCase):
         message = {}
         tasks.task_check_citation(message)
         self.assertTrue(True)
+
+    def test_task_output_results(self):
+        with patch('adscc.app.ADSCitationCaptureCelery.forward_message', return_value=None) as forward_message:
+            msg = { }
+            tasks.task_output_results(msg)
+            self.assertTrue(forward_message.called)
 
 if __name__ == '__main__':
     unittest.main()

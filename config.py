@@ -1,5 +1,5 @@
 
-CELERY_BROKER = 'pyamqp://user:passowrd@localhost:5672/citation_capture_pipeline'
+CELERY_BROKER = 'pyamqp://user:password@localhost:5672/citation_capture_pipeline'
 OUTPUT_CELERY_BROKER = 'pyamqp://user:password@localhost:5672/master_pipeline'
 OUTPUT_TASKNAME = 'adsmp.tasks.task_update_record'
 
