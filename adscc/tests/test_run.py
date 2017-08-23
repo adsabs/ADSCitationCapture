@@ -28,8 +28,8 @@ class TestWorkers(unittest.TestCase):
 
         # Call the task to check if it should be extracted but mock the extraction task
         with patch.object(tasks.task_check_citation, 'delay', return_value=None) as task_extract:
-            message = {}
-            run(message)
+            refids_filename = "/dev/null"
+            run(refids_filename)
             self.assertTrue(task_extract.called)
 
 if __name__ == '__main__':
