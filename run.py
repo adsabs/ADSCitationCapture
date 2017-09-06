@@ -65,25 +65,26 @@ def verify_input_data(connection, schema_name, expanded_table_name):
     if count_duplicates > 0:
         raise Exception("There are duplicate entries with the same citing, doi, pid and url fields")
 
-def join_tables(connection, inspector, previous_schema_name, expanded_table_name, joint_table):
-    joint_table = "joint_"+table_name
+def join_tables(connection, inspector, schema_name, previous_schema_name, expanded_table_name):
+    # ~1h
+    joint_table = "joint_"+expanded_table_name
     join_tables_sql = \
             "create table {0}.{3} as \
                 select \
                     {0}.{2}.id as id, \
                     {0}.{2}.citing as citing, \
+                    {0}.{2}.cited as cited, \
                     {0}.{2}.doi as doi, \
                     {0}.{2}.pid as pid, \
                     {0}.{2}.url as url, \
                     {0}.{2}.score as score, \
-                    {0}.{2}.source as source, \
                     {1}.{2}.id as previous_id, \
                     {1}.{2}.citing as previous_citing, \
+                    {1}.{2}.cited as previous_cited, \
                     {1}.{2}.doi as previous_doi, \
                     {1}.{2}.pid as previous_pid, \
                     {1}.{2}.url as previous_url, \
-                    {1}.{2}.score as previous_score, \
-                    {1}.{2}.source as previous_source \
+                    {1}.{2}.score as previous_score \
                 from {1}.{2} full join {0}.{2} \
                 on \
                     {0}.{2}.citing={1}.{2}.citing \
@@ -95,21 +96,42 @@ def join_tables(connection, inspector, previous_schema_name, expanded_table_name
     status_enum_name = schema_name+".status_type"
     enum_names = [e['name'] for e in inspector.get_enums(schema=schema_name)]
     if status_enum_name not in enum_names:
-        connection.execute("CREATE TYPE {0} AS ENUM ('NEW', 'DELETED', 'IDENTICAL');".format(status_enum_name))
+        connection.execute("CREATE TYPE {0} AS ENUM ('NEW', 'DELETED', 'UPDATED', 'IDENTICAL');".format(status_enum_name))
     add_status_column = "ALTER TABLE {0}.{1} ADD COLUMN status {2};"
     sql_command = add_status_column.format(schema_name,  joint_table, status_enum_name)
     logger.debug("Executing SQL: %s", sql_command)
     connection.execute(sql_command)
+
+    ## ~1h
+    #create_index = "CREATE INDEX status_idx ON {0}.{1} (status);"
+    #sql_command = create_index.format(schema_name,  joint_table)
+    #logger.debug("Executing SQL: %s", sql_command)
+    #connection.execute(sql_command)
+
+    return joint_table
 
 def calculate_delta(connection, schema_name, joint_table):
     update_status_identical_sql = \
        "update {0}.{1} \
         set status='IDENTICAL' \
         where \
-            {0}.{1}.id is not null \
+            {0}.{1}.status is null \
+            and {0}.{1}.id is not null \
             and {0}.{1}.previous_id is not null;"
 
     sql_command = update_status_identical_sql.format(schema_name, joint_table)
+    logger.debug("Executing SQL: %s", sql_command)
+    connection.execute(sql_command)
+
+    update_status_updated_sql = \
+       "update {0}.{1} \
+        set status='UPDATED' \
+        where \
+            {0}.{1}.status='IDENTICAL' \
+            and {0}.{1}.cited<>{0}.{1}.previous_cited \
+            and {0}.{1}.score<>{0}.{1}.previous_score;"
+
+    sql_command = update_status_updated_sql.format(schema_name, joint_table)
     logger.debug("Executing SQL: %s", sql_command)
     connection.execute(sql_command)
 
@@ -117,7 +139,8 @@ def calculate_delta(connection, schema_name, joint_table):
        "update {0}.{1} \
         set status='NEW' \
         where \
-            {0}.{1}.id is not null \
+            {0}.{1}.status is null \
+            and {0}.{1}.id is not null \
             and {0}.{1}.previous_id is null;"
 
     sql_command = update_status_new_sql.format(schema_name, joint_table)
@@ -128,7 +151,8 @@ def calculate_delta(connection, schema_name, joint_table):
        "update {0}.{1} \
         set status='DELETED' \
         where \
-            {0}.{1}.id is null \
+            {0}.{1}.status is null \
+            and {0}.{1}.id is null \
             and {0}.{1}.previous_id is not null;"
 
     sql_command = update_status_deleted_sql.format(schema_name, joint_table)
@@ -204,6 +228,7 @@ def run(refids, **kwargs):
         logger.debug("Executing SQL: %s", sql_command)
         connection.execute(sql_command)
 
+        # Expand ignoring the source field
         create_expanded_table = \
                 "create table {0}.{2} as \
                     select id, \
@@ -213,10 +238,28 @@ def run(refids, **kwargs):
                         payload->>'pid' as pid, \
                         payload->>'url' as url, \
                         concat(payload->>'doi'::text, payload->>'pid'::text, payload->>'url'::text) as data, \
-                        payload->>'score' as score, \
-                        payload->>'source' as source \
+                        payload->>'score' as score \
                     from {0}.{1};"
         sql_command = create_expanded_table.format(schema_name, table_name, expanded_table_name)
+        logger.debug("Executing SQL: %s", sql_command)
+        connection.execute(sql_command)
+
+
+        # The input file can have duplicates such as:
+        #   2011arXiv1112.0312C	{"cited":"2012ascl.soft03003C","citing":"2011arXiv1112.0312C","pid":"ascl:1203.003","score":"1","source":"/proj/ads/references/resolved/arXiv/1112/0312.raw.result:10"}
+        #   2011arXiv1112.0312C	{"cited":"2012ascl.soft03003C","citing":"2011arXiv1112.0312C","pid":"ascl:1203.003","score":"1","source":"/proj/ads/references/resolved/AUTHOR/2012/0605.pairs.result:89"}
+        # Because the same citation was identified in more than one source. We can safely ignore them.
+        delete_duplicates_sql = \
+            "DELETE FROM {0}.{1} a USING ( \
+                    SELECT MIN(id) as id, citing, data \
+                        FROM {0}.{1} \
+                        GROUP BY citing, data \
+                        HAVING COUNT(*) > 1 \
+                ) b \
+                WHERE a.citing = b.citing \
+                    AND a.data = a.data \
+                    AND a.id <> b.id"
+        sql_command = delete_duplicates_sql.format(schema_name, expanded_table_name)
         logger.debug("Executing SQL: %s", sql_command)
         connection.execute(sql_command)
 
@@ -227,9 +270,8 @@ def run(refids, **kwargs):
             raise
 
         if previous_schema_name is not None:
-            #joint_table = join_tables(connection, inspector, previous_schema_name, expanded_table_name)
-            #calculate_delta(connection, schema_name, joint_table)
-            pass
+            joint_table = join_tables(connection, inspector, schema_name, previous_schema_name, expanded_table_name)
+            calculate_delta(connection, schema_name, joint_table)
         else:
             # ALL is NEW
             pass
