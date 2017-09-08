@@ -13,8 +13,6 @@ install:
  - pip install -r dev-requirements.txt
 before_script:
   - psql -c "CREATE DATABASE citation_capture_pipeline;" -U postgres
-  - psql -c "CREATE USER user PASSWORD 'password';" -U postgres
-  - psql -c "GRANT ALL PRIVILEGES ON DATABASE citation_capture_pipeline TO user;" -U postgres
 script:
  - py.test
 after_success:
