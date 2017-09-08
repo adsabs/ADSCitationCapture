@@ -86,7 +86,7 @@ class DeltaComputation():
 
     def next(self): # Python 3: def __next__(self)
         """Iterates over the results, grouping changes in chunks"""
-        if self.offset > self.n_changes or self.n_changes == 0:
+        if self.offset >= self.n_changes or self.n_changes == 0:
             raise StopIteration
         else:
             citation_changes = adsmsg.CitationChanges()

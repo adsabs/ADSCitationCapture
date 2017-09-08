@@ -25,28 +25,26 @@ def run(refids_filename, **kwargs):
 
     logger.info('Loading records from: {0}'.format(refids_filename))
 
-    if 'force' in kwargs:
-        force = kwargs['force']
+    force = kwargs.get('force', False)
+    diagnose = kwargs.get('diagnose', False)
+    if diagnose:
+        schema_prefix = "diagnose_citation_capture_"
     else:
-        force = False
-
-    if 'diagnose' in kwargs:
-        diagnose = kwargs['diagnose']
-    else:
-        diagnose = False
+        schema_prefix = kwargs.get('schema_prefix', "citation_capture_")
 
     # Engine
     sqlachemy_url = config.get('SQLALCHEMY_URL', 'postgres://user:password@localhost:5432/citation_capture_pipeline')
     sqlalchemy_echo = config.get('SQLALCHEMY_ECHO', False)
 
-    delta = DeltaComputation(sqlachemy_url, sqlalchemy_echo=sqlalchemy_echo, group_changes_in_chunks_of=1, force=force)
+    delta = DeltaComputation(sqlachemy_url, sqlalchemy_echo=sqlalchemy_echo, group_changes_in_chunks_of=1, schema_prefix=schema_prefix, force=force)
     delta.compute(refids_filename)
     for changes in delta:
         if diagnose:
             print("Calling 'task_process_citation_changes' with '{}'".format(str(changes)))
         logger.debug("Calling 'task_process_citation_changes' with '%s'", str(changes))
-        #tasks.task_process_citation_changes.delay(changes)
-        tasks.task_process_citation_changes(changes)
+        tasks.task_process_citation_changes.delay(changes)
+    if diagnose:
+        delta._execute_sql("drop schema {0} cascade;", delta.schema_name)
 
 
 def build_diagnostics(bibcodes=None, json_payloads=None):
@@ -60,6 +58,7 @@ def build_diagnostics(bibcodes=None, json_payloads=None):
         print("\t{}".format(tmp_str))
         tmp_file.write(tmp_str+"\n")
     tmp_file.close()
+    os.utime(tmp_file.name, (0, 0)) # set the access and modified times to 19700101_000000
     return tmp_file.name
 
 if __name__ == '__main__':
