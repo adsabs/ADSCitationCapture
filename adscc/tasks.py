@@ -2,6 +2,9 @@ from __future__ import absolute_import, unicode_literals
 import os
 from kombu import Queue
 import adscc.app as app_module
+import adscc.webhook as webhook
+import adscc.doi as doi
+import adscc.url as url
 #from adsmsg import CitationUpdate
 
 # ============================= INITIALIZATION ==================================== #
@@ -27,16 +30,30 @@ def task_process_citation_changes(citation_changes):
     logger.debug('Checking content: %s', citation_changes)
     for citation_change in citation_changes.changes:
         if citation_change.doi != "":
-            # TODO: Fetch DOI metadata
-            pass
+            # Fetch DOI metadata (if HTTP request fails, an exception is raised
+            # and the task will be re-queued (see app.py and adsputils))
+            is_software = doi.is_software(app.conf['DOI_URL'], doi)
+            is_link_alive = True
         elif citation_change.pid != "":
-            # TODO: Fetch ASCL metadata?
-            pass
+            is_software = True
+            is_link_alive = url.is_alive(app.conf['ASCL_URL'] + citation_change.pid)
         elif citation_change.url != "":
-            # TODO: Check is a valid and alive URL
-            pass
+            is_software = False
+            is_link_alive = url.is_alive(citation_change.url)
         else:
-            raise Exception("Citation change should have doi, pid or url informed: %s", citation_change)
+            is_software = False
+            is_link_alive = False
+            logger.error("Citation change should have doi, pid or url informed: {}", citation_change)
+            #raise Exception("Citation change should have doi, pid or url informed: {}".format(citation_change))
+
+        emitted = False
+        if is_software and is_link_alive:
+            emitted = webhook.emit_event(app.conf['ADS_WEBHOOK_URL'], app.conf['ADS_WEBHOOK_AUTH_TOKEN'], citation_changes)
+
+        if emitted:
+            logger.debug("Emitted '%s'", citation_change)
+        else:
+            logger.debug("Not emitted '%s'", citation_change)
 
         #logger.debug("Calling 'task_output_results' with '%s'", citation_change)
         ##task_output_results.delay(citation_change)
