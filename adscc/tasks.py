@@ -32,7 +32,7 @@ def task_process_citation_changes(citation_changes):
         if citation_change.doi != "":
             # Fetch DOI metadata (if HTTP request fails, an exception is raised
             # and the task will be re-queued (see app.py and adsputils))
-            is_software = doi.is_software(app.conf['DOI_URL'], doi)
+            is_software = doi.is_software(app.conf['DOI_URL'], citation_change.doi)
             is_link_alive = True
         elif citation_change.pid != "":
             is_software = True
@@ -48,7 +48,7 @@ def task_process_citation_changes(citation_changes):
 
         emitted = False
         if is_software and is_link_alive:
-            emitted = webhook.emit_event(app.conf['ADS_WEBHOOK_URL'], app.conf['ADS_WEBHOOK_AUTH_TOKEN'], citation_changes)
+            emitted = webhook.emit_event(app.conf['ADS_WEBHOOK_URL'], app.conf['ADS_WEBHOOK_AUTH_TOKEN'], citation_change)
 
         if emitted:
             logger.debug("Emitted '%s'", citation_change)

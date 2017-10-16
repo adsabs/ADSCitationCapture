@@ -20,6 +20,9 @@ def is_software(base_doi_url, doi):
         logger.exception("HTTP request to DOI service failed: %s", doi_endpoint)
         success = False
     else:
+        if r.status_code == 406:
+            logger.error("No answer from doi.org with the requested format (%s) for: %s", headers["Accept"], doi_endpoint)
+            raise Exception("No answer from doi.org with the requested format ({}) for: {}".format(headers["Accept"], doi_endpoint))
         success = True
 
     if not success or not r.ok:
