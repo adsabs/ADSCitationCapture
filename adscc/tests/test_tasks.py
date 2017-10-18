@@ -30,10 +30,9 @@ class TestWorkers(unittest.TestCase):
         citation_change = citation_changes.changes.add()
         citation_change.citing = '2005CaJES..42.1987P'
         citation_change.cited = '...................'
-        citation_change.doi = '10.1016/0277-3791'
-        citation_change.pid = ''
-        citation_change.url = ''
-        citation_change.score = "0"
+        citation_change.content = '10.1016/0277-3791'
+        citation_change.content_type = adsmsg.CitationChangeContentType.doi
+        citation_change.resolved = False
         citation_change.status = adsmsg.Status.new
 
         with patch.object(webhook, 'emit_event', return_value=True) as webhook_emit_event:
@@ -47,10 +46,9 @@ class TestWorkers(unittest.TestCase):
         citation_change = citation_changes.changes.add()
         citation_change.citing = '2017MNRAS.470.1687B'
         citation_change.cited = '...................'
-        citation_change.doi = ''
-        citation_change.pid = 'ascl:1210.002'
-        citation_change.url = ''
-        citation_change.score = "0"
+        citation_change.content = 'ascl:1210.002'
+        citation_change.content_type = adsmsg.CitationChangeContentType.pid
+        citation_change.resolved = False
         citation_change.status = adsmsg.Status.new
 
         with patch.object(webhook, 'emit_event', return_value=True) as webhook_emit_event:
@@ -64,10 +62,9 @@ class TestWorkers(unittest.TestCase):
         citation_change = citation_changes.changes.add()
         citation_change.citing = '2017arXiv170610086M'
         citation_change.cited = '...................'
-        citation_change.doi = ''
-        citation_change.pid = ''
-        citation_change.url = 'https://github.com/ComputationalRadiationPhysics/graybat'
-        citation_change.score = "0"
+        citation_change.content = 'https://github.com/ComputationalRadiationPhysics/graybat'
+        citation_change.content_type = adsmsg.CitationChangeContentType.url
+        citation_change.resolved = False
         citation_change.status = adsmsg.Status.new
 
         with patch.object(webhook, 'emit_event', return_value=True) as webhook_emit_event:
@@ -76,15 +73,28 @@ class TestWorkers(unittest.TestCase):
                 self.assertTrue(url_is_alive.called)
                 self.assertFalse(webhook_emit_event.called) # because we don't know if an URL is software
 
+    def test_process_citation_changes_malformed_url(self):
+        citation_changes = adsmsg.CitationChanges()
+        citation_change = citation_changes.changes.add()
+        citation_change.citing = '2017arXiv170610086M'
+        citation_change.cited = '...................'
+        citation_change.content = 'malformedhttps://github.com/ComputationalRadiationPhysics/graybat'
+        citation_change.content_type = adsmsg.CitationChangeContentType.url
+        citation_change.resolved = False
+        citation_change.status = adsmsg.Status.new
+
+        with patch.object(webhook, 'emit_event', return_value=True) as webhook_emit_event:
+            tasks.task_process_citation_changes(citation_changes)
+            self.assertFalse(webhook_emit_event.called) # because URL does not match an URL pattern
+
     def test_process_citation_changes_empty(self):
         citation_changes = adsmsg.CitationChanges()
         citation_change = citation_changes.changes.add()
         citation_change.citing = '2017arXiv170610086M'
         citation_change.cited = '...................'
-        citation_change.doi = ''
-        citation_change.pid = ''
-        citation_change.url = ''
-        citation_change.score = "0"
+        citation_change.content = ''
+        citation_change.content_type = adsmsg.CitationChangeContentType.url
+        citation_change.resolved = False
         citation_change.status = adsmsg.Status.new
 
         with patch.object(webhook, 'emit_event', return_value=True) as webhook_emit_event:

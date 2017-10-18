@@ -92,6 +92,7 @@ class DeltaComputation():
             citation_changes = adsmsg.CitationChanges()
             CitationChanges.__table__.schema = self.schema_name
             # Get citation changes from DB
+            #for instance in self.session.query(CitationChanges).filter(CitationChanges.new_doi.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
             for instance in self.session.query(CitationChanges).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
                 ## Build protobuf message
                 citation_change = citation_changes.changes.add()
@@ -99,10 +100,14 @@ class DeltaComputation():
                 prefix = "previous_" if instance.status == "DELETED" else "new_"
                 citation_change.citing = getattr(instance, prefix+"citing")
                 citation_change.cited = getattr(instance, prefix+"cited")
-                citation_change.doi = '' if getattr(instance, prefix+"doi") is None else getattr(instance, prefix+"doi")
-                citation_change.pid = '' if getattr(instance, prefix+"pid") is None else getattr(instance, prefix+"pid")
-                citation_change.url = '' if getattr(instance, prefix+"url") is None else getattr(instance, prefix+"url")
-                citation_change.score = getattr(instance, prefix+"score")
+                if getattr(instance, prefix+"doi"):
+                    citation_change.content_type = adsmsg.CitationChangeContentType.doi
+                elif getattr(instance, prefix+"pid"):
+                    citation_change.content_type = adsmsg.CitationChangeContentType.pid
+                elif getattr(instance, prefix+"url"):
+                    citation_change.content_type = adsmsg.CitationChangeContentType.url
+                citation_change.content = getattr(instance, prefix+"content")
+                citation_change.resolved = getattr(instance, prefix+"resolved")
                 citation_change.status = getattr(adsmsg.Status, instance.status.lower())
             self.session.commit()
 
@@ -181,18 +186,23 @@ class DeltaComputation():
         elif table_already_exists:
             return
 
-        # Expand ignoring the source field
+        # Expand ignoring the source field, keeping only information about
+        # score == "1" which have resolved bibcodes in the cited field
+        # and ordered by citing, data and reverse resolved to guarantee that
+        # duplicates where there is one entry that is resolved and others that
+        # don't, the one that is resolved is the one kept (the rest are removed,
+        # see _delete_dups where MIN(id) is kept)
         create_expanded_table = \
                 "create table {0}.{2} as \
                     select id, \
                         payload->>'citing' as citing, \
                         payload->>'cited' as cited, \
-                        payload->>'doi' as doi, \
-                        payload->>'pid' as pid, \
-                        payload->>'url' as url, \
-                        concat(payload->>'doi'::text, payload->>'pid'::text, payload->>'url'::text) as data, \
-                        payload->>'score' as score \
-                    from {0}.{1};"
+                        (payload->>'doi' is not null) as doi, \
+                        (payload->>'pid' is not null) as pid, \
+                        (payload->>'url' is not null) as url, \
+                        concat(payload->>'doi'::text, payload->>'pid'::text, payload->>'url'::text) as content, \
+                        (payload->>'score' is not null and payload->>'score' = '1') as resolved \
+                    from {0}.{1} order by citing asc, content asc, resolved desc;"
         self._execute_sql(create_expanded_table, self.schema_name, self.table_name, self.expanded_table_name)
 
 
@@ -207,13 +217,23 @@ class DeltaComputation():
         """
         delete_duplicates_sql = \
             "DELETE FROM {0}.{1} a USING ( \
-                    SELECT MIN(id) as id, citing, data \
+                    SELECT citing, content \
                         FROM {0}.{1} \
-                        GROUP BY citing, data \
+                        GROUP BY citing, content \
                         HAVING COUNT(*) > 1 \
                 ) b \
                 WHERE a.citing = b.citing \
-                    AND a.data = a.data \
+                    AND a.content = a.content \
+                    AND a.id <> b.id"
+        delete_duplicates_sql = \
+            "DELETE FROM {0}.{1} a USING ( \
+                    SELECT MIN(id) as id, citing, content \
+                        FROM {0}.{1} \
+                        GROUP BY citing, content \
+                        HAVING COUNT(*) > 1 \
+                ) b \
+                WHERE a.citing = b.citing \
+                    AND a.content = a.content \
                     AND a.id <> b.id"
         self._execute_sql(delete_duplicates_sql, self.schema_name, self.expanded_table_name)
 
@@ -241,9 +261,9 @@ class DeltaComputation():
                 "select count(*) \
                     from {0}.{1} \
                     where (\
-                            doi is null \
-                            and pid is null \
-                            and url is null \
+                            not doi \
+                            and not pid \
+                            and not url \
                         );"
         n_all_fields_null = self._execute_sql(count_all_fields_null_sql, self.schema_name, self.expanded_table_name).scalar()
         if n_all_fields_null > 0:
@@ -254,10 +274,10 @@ class DeltaComputation():
                 "select count(*) \
                     from {0}.{1} \
                     where (\
-                            (doi is not null and pid is not null and url is null) \
-                            or (doi is not null and pid is null and url is not null) \
-                            or (doi is null and pid is not null and url is not null) \
-                            or (doi is not null and pid is not null and url is not null) \
+                            (doi and pid and not url) \
+                            or (doi and not pid and url) \
+                            or (not doi and pid and url) \
+                            or (doi and pid and url) \
                         );"
         n_too_many_fields_not_null = self._execute_sql(count_too_many_fields_not_null_sql, self.schema_name, self.expanded_table_name).scalar()
         if n_too_many_fields_not_null > 0:
@@ -267,7 +287,7 @@ class DeltaComputation():
         count_duplicates_sql = \
                 "select count(*) \
                     from {0}.{1} \
-                    group by citing, data \
+                    group by citing, content \
                     having count(*) > 1;"
         n_duplicates = self._execute_sql(count_duplicates_sql, self.schema_name, self.expanded_table_name).scalar()
         if n_duplicates > 0:
@@ -302,16 +322,16 @@ class DeltaComputation():
                             {0}.{1}.doi as new_doi, \
                             {0}.{1}.pid as new_pid, \
                             {0}.{1}.url as new_url, \
-                            {0}.{1}.data as new_data, \
-                            {0}.{1}.score as new_score, \
+                            {0}.{1}.content as new_content, \
+                            {0}.{1}.resolved as new_resolved, \
                             cast(null as text) as previous_id, \
                             cast(null as text) as previous_citing, \
                             cast(null as text) as previous_cited, \
-                            cast(null as text) as previous_doi, \
-                            cast(null as text) as previous_pid, \
-                            cast(null as text) as previous_url, \
-                            cast(null as text) as previous_data, \
-                            cast(null as text) as previous_score \
+                            cast(null as boolean) as previous_doi, \
+                            cast(null as boolean) as previous_pid, \
+                            cast(null as boolean) as previous_url, \
+                            cast(null as text) as previous_content, \
+                            cast(null as boolean) as previous_resolved \
                         from {0}.{1};"
             self._execute_sql(joint_table_sql, self.schema_name, self.expanded_table_name, self.joint_table_name)
         else:
@@ -324,24 +344,24 @@ class DeltaComputation():
                             {0}.{2}.doi as new_doi, \
                             {0}.{2}.pid as new_pid, \
                             {0}.{2}.url as new_url, \
-                            {0}.{2}.data as new_data, \
-                            {0}.{2}.score as new_score, \
+                            {0}.{2}.content as new_content, \
+                            {0}.{2}.resolved as new_resolved, \
                             {1}.{2}.id as previous_id, \
                             {1}.{2}.citing as previous_citing, \
                             {1}.{2}.cited as previous_cited, \
                             {1}.{2}.doi as previous_doi, \
                             {1}.{2}.pid as previous_pid, \
                             {1}.{2}.url as previous_url, \
-                            {1}.{2}.data as previous_data, \
-                            {1}.{2}.score as previous_score \
+                            {1}.{2}.content as previous_content, \
+                            {1}.{2}.resolved as previous_resolved \
                         from {1}.{2} full join {0}.{2} \
                         on \
                             {0}.{2}.citing={1}.{2}.citing \
-                            and {0}.{2}.data={1}.{2}.data \
+                            and {0}.{2}.content={1}.{2}.content \
                         where \
                             ({0}.{2}.id is not null and {1}.{2}.id is null) \
                             or ({0}.{2}.id is null and {1}.{2}.id is not null) \
-                            or ({0}.{2}.id is not null and {1}.{2}.id is not null and ({0}.{2}.cited<>{1}.{2}.cited or {0}.{2}.score<>{1}.{2}.score)) \
+                            or ({0}.{2}.id is not null and {1}.{2}.id is not null and ({0}.{2}.cited<>{1}.{2}.cited or {0}.{2}.resolved<>{1}.{2}.resolved)) \
                         ;"
             self._execute_sql(joint_table_sql, self.schema_name, self.previous_schema_name, self.expanded_table_name, self.joint_table_name)
 
@@ -371,7 +391,7 @@ class DeltaComputation():
                 and {0}.{1}.new_id is not null \
                 and {0}.{1}.previous_id is not null \
                 and ({0}.{1}.new_cited<>{0}.{1}.previous_cited \
-                    or {0}.{1}.new_score<>{0}.{1}.previous_score);"
+                    or {0}.{1}.new_resolved<>{0}.{1}.previous_resolved);"
         self._execute_sql(update_status_updated_sql, self.schema_name, self.joint_table_name)
 
         update_status_new_sql = \

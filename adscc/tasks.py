@@ -5,7 +5,7 @@ import adscc.app as app_module
 import adscc.webhook as webhook
 import adscc.doi as doi
 import adscc.url as url
-#from adsmsg import CitationUpdate
+import adsmsg
 
 # ============================= INITIALIZATION ==================================== #
 
@@ -29,17 +29,20 @@ def task_process_citation_changes(citation_changes):
     """
     logger.debug('Checking content: %s', citation_changes)
     for citation_change in citation_changes.changes:
-        if citation_change.doi != "":
+        if citation_change.content_type == adsmsg.CitationChangeContentType.doi \
+            and citation_change.content not in ["", None]:
             # Fetch DOI metadata (if HTTP request fails, an exception is raised
             # and the task will be re-queued (see app.py and adsputils))
-            is_software = doi.is_software(app.conf['DOI_URL'], citation_change.doi)
+            is_software = doi.is_software(app.conf['DOI_URL'], citation_change.content)
             is_link_alive = True
-        elif citation_change.pid != "":
+        elif citation_change.content_type == adsmsg.CitationChangeContentType.pid \
+            and citation_change.content not in ["", None]:
             is_software = True
-            is_link_alive = url.is_alive(app.conf['ASCL_URL'] + citation_change.pid)
-        elif citation_change.url != "":
+            is_link_alive = url.is_alive(app.conf['ASCL_URL'] + citation_change.content)
+        elif citation_change.content_type == adsmsg.CitationChangeContentType.url \
+            and citation_change.content not in ["", None]:
             is_software = False
-            is_link_alive = url.is_alive(citation_change.url)
+            is_link_alive = url.is_alive(citation_change.content)
         else:
             is_software = False
             is_link_alive = False
