@@ -92,7 +92,7 @@ class DeltaComputation():
             citation_changes = adsmsg.CitationChanges()
             CitationChanges.__table__.schema = self.schema_name
             # Get citation changes from DB
-            #for instance in self.session.query(CitationChanges).filter(CitationChanges.new_doi.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
+            #for instance in self.session.query(CitationChanges).filter(CitationChanges.data.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
             for instance in self.session.query(CitationChanges).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
                 ## Build protobuf message
                 citation_change = citation_changes.changes.add()
@@ -213,28 +213,16 @@ class DeltaComputation():
            2011arXiv1112.0312C	{"cited":"2012ascl.soft03003C","citing":"2011arXiv1112.0312C","pid":"ascl:1203.003","score":"1","source":"/proj/ads/references/resolved/arXiv/1112/0312.raw.result:10"}
            2011arXiv1112.0312C	{"cited":"2012ascl.soft03003C","citing":"2011arXiv1112.0312C","pid":"ascl:1203.003","score":"1","source":"/proj/ads/references/resolved/AUTHOR/2012/0605.pairs.result:89"}
 
-        Because the same citation was identified in more than one source. We can safely ignore them.
+        Because the same citation was identified in more than one source.
+        We can safely ignore them but in case there is any of these dups
+        that were not resolved, the resolved one should be prioriticed.
         """
         delete_duplicates_sql = \
-            "DELETE FROM {0}.{1} a USING ( \
-                    SELECT citing, content \
-                        FROM {0}.{1} \
-                        GROUP BY citing, content \
-                        HAVING COUNT(*) > 1 \
-                ) b \
-                WHERE a.citing = b.citing \
-                    AND a.content = a.content \
-                    AND a.id <> b.id"
-        delete_duplicates_sql = \
-            "DELETE FROM {0}.{1} a USING ( \
-                    SELECT MIN(id) as id, citing, content \
-                        FROM {0}.{1} \
-                        GROUP BY citing, content \
-                        HAVING COUNT(*) > 1 \
-                ) b \
-                WHERE a.citing = b.citing \
-                    AND a.content = a.content \
-                    AND a.id <> b.id"
+            "DELETE FROM {0}.{1} WHERE id IN ( \
+                SELECT id FROM \
+                    (SELECT id, row_number() over(partition by citing, content order by resolved desc) AS dup_id FROM {0}.{1}) t \
+                WHERE t.dup_id > 1 \
+            )"
         self._execute_sql(delete_duplicates_sql, self.schema_name, self.expanded_table_name)
 
     def _compute_n_changes(self):
