@@ -92,14 +92,19 @@ class DeltaComputation():
             citation_changes = adsmsg.CitationChanges()
             CitationChanges.__table__.schema = self.schema_name
             # Get citation changes from DB
-            #for instance in self.session.query(CitationChanges).filter(CitationChanges.data.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
+            #for instance in self.session.query(CitationChanges).filter(CitationChanges.content.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
             for instance in self.session.query(CitationChanges).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
                 ## Build protobuf message
                 citation_change = citation_changes.changes.add()
                 # Use new_ or previous_ fields depending if status is NEW/UPDATED or DELETED
                 prefix = "previous_" if instance.status == "DELETED" else "new_"
                 citation_change.citing = getattr(instance, prefix+"citing")
-                citation_change.cited = getattr(instance, prefix+"cited")
+                resolved = getattr(instance, prefix+"resolved")
+                if resolved:
+                    # Only accept cited bibcode if score is 1 (resolved)
+                    citation_change.cited = getattr(instance, prefix+"cited")
+                else:
+                    citation_change.cited = '...................'
                 if getattr(instance, prefix+"doi"):
                     citation_change.content_type = adsmsg.CitationChangeContentType.doi
                 elif getattr(instance, prefix+"pid"):
