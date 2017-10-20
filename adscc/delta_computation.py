@@ -92,7 +92,7 @@ class DeltaComputation():
             citation_changes = adsmsg.CitationChanges()
             CitationChanges.__table__.schema = self.schema_name
             # Get citation changes from DB
-            #for instance in self.session.query(CitationChanges).filter(CitationChanges.content.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
+            #for instance in self.session.query(CitationChanges).filter(CitationChanges.new_content.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
             for instance in self.session.query(CitationChanges).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
                 ## Build protobuf message
                 citation_change = citation_changes.changes.add()
