@@ -81,6 +81,17 @@ class DeltaComputation():
         self.logger.debug("Executing SQL: %s", sql_command)
         return self.connection.execute(sql_command)
 
+    def _citation_changes_query(self):
+        if self.joint_table_name in Inspector.from_engine(self.engine).get_table_names(schema=self.schema_name):
+            CitationChanges.__table__.schema = self.schema_name
+        ## Only consider Zenodo and ASCL records
+        #sqlalchemy_query = self.session.query(CitationChanges).filter((CitationChanges.new_content.like('%zenodo%')) | (CitationChanges.new_pid.is_(True)))
+        ## Only consider Zenodo
+        #sqlalchemy_query = self.session.query(CitationChanges).filter(CitationChanges.new_content.like('%zenodo%'))
+        # Consider Zenodo, ASCL and URL records (all of them)
+        sqlalchemy_query = self.session.query(CitationChanges)
+        return sqlalchemy_query
+
     def __iter__(self):
         return self
 
@@ -90,10 +101,8 @@ class DeltaComputation():
             raise StopIteration
         else:
             citation_changes = adsmsg.CitationChanges()
-            CitationChanges.__table__.schema = self.schema_name
             # Get citation changes from DB
-            #for instance in self.session.query(CitationChanges).filter(CitationChanges.new_content.like('%zenodo%')).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
-            for instance in self.session.query(CitationChanges).offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
+            for instance in self._citation_changes_query().offset(self.offset).limit(self.group_changes_in_chunks_of).yield_per(100):
                 ## Build protobuf message
                 citation_change = citation_changes.changes.add()
                 # Use new_ or previous_ fields depending if status is NEW/UPDATED or DELETED
@@ -233,9 +242,8 @@ class DeltaComputation():
     def _compute_n_changes(self):
         """Count how many citation changes were identified"""
         if self.joint_table_name in Inspector.from_engine(self.engine).get_table_names(schema=self.schema_name):
-            count_all_fields_null_sql = "select count(*) from {0}.{1};"
-            n_changes = self._execute_sql(count_all_fields_null_sql, self.schema_name, self.joint_table_name)
-            return n_changes.scalar()
+            n_changes = self._citation_changes_query().count()
+            return n_changes
         else:
             return 0
 

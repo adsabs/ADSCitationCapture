@@ -32,6 +32,7 @@ def is_software(base_doi_url, doi):
         elif not r.ok:
             # Rest of bad status codes
             try_later = True
+            logger.error("HTTP request with error code '%s' for: %s", r.status_code, doi_endpoint)
         else:
             record_found = True
 
