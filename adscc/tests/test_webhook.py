@@ -34,34 +34,40 @@ class TestWorkers(unittest.TestCase):
 
 
     def _build_expected_json_body(self, event_type, original_relationship_name, source_bibcode, target_id, target_id_schema, target_url):
-        expected_json_body = {
-                                u'event_type': event_type,
-                                u'payload': [
-                                    {
-                                        u'license_url': u'https://creativecommons.org/publicdomain/zero/1.0/',
-                                        u'relationship_type': {
-                                           u'original_relationship_name': original_relationship_name,
-                                           u'original_relationship_schema': u'DataCite',
-                                           u'scholix_relationship': u'references'
-                                        },
-                                        u'source': {
-                                             u'identifier': {
-                                                 u'id': source_bibcode,
-                                                 u'id_schema': u'bibcode',
-                                                 u'id_url': u'http://adsabs.harvard.edu/abs/'
-                                             }
-                                        },
-                                        u'target': {
-                                             u'identifier': {
-                                                 u'id': target_id,
-                                                 u'id_schema': target_id_schema,
-                                                 u'id_url': target_url
-                                             },
-                                            u'type': {u'name': u'software'}
-                                        }
-                                    }
-                                ]
-                            }
+        expected_json_body = [{
+            "RelationshipType": {
+                "SubTypeSchema": "DataCite",
+                "SubType": "Cites",
+                "Name": "References"
+            },
+            "Source": {
+                "Identifier": {
+                    "IDScheme": "ads",
+                    "IDURL": "http://adsabs.harvard.edu/abs/{}".format(source_bibcode),
+                    "ID": source_bibcode
+                },
+                "Type": {
+                    "Name": "unknown"
+                }
+            },
+            "LicenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "Target": {
+                "Identifier": {
+                    "IDScheme": target_id_schema,
+                    "IDURL": target_url,
+                    "ID": target_id
+                },
+                "Type": {
+                    "Name": "software"
+                }
+            },
+            "LinkPublicationDate": "2018-10-23",
+            "LinkProvider": [
+                {
+                    "Name": "SAO/NASA Astrophysics Data System"
+                }
+            ]
+        }]
         return expected_json_body
 
     ### DOI
