@@ -1,10 +1,12 @@
 import unittest
 import httpretty
+import datetime
 import json
 import adsmsg
 from adscc import app, tasks
 from adscc import webhook
 
+now = datetime.datetime.now()
 
 class TestWorkers(unittest.TestCase):
 
@@ -35,36 +37,36 @@ class TestWorkers(unittest.TestCase):
 
     def _build_expected_json_body(self, event_type, original_relationship_name, source_bibcode, target_id, target_id_schema, target_url):
         expected_json_body = [{
-            "RelationshipType": {
-                "SubTypeSchema": "DataCite",
-                "SubType": "Cites",
-                "Name": "References"
+            u'RelationshipType': {
+                u'SubTypeSchema': u'DataCite',
+                u'SubType': u'Cites',
+                u'Name': u'References'
             },
-            "Source": {
-                "Identifier": {
-                    "IDScheme": "ads",
-                    "IDURL": "http://adsabs.harvard.edu/abs/{}".format(source_bibcode),
-                    "ID": source_bibcode
+            u'Source': {
+                u'Identifier': {
+                    u'IDScheme': u'ads',
+                    u'IDURL': u'http://adsabs.harvard.edu/abs/{}'.format(source_bibcode),
+                    u'ID': source_bibcode
                 },
-                "Type": {
-                    "Name": "unknown"
+                u'Type': {
+                    u'Name': u'unknown'
                 }
             },
-            "LicenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
-            "Target": {
-                "Identifier": {
-                    "IDScheme": target_id_schema,
-                    "IDURL": target_url,
-                    "ID": target_id
+            u'LicenseURL': u'https://creativecommons.org/publicdomain/zero/1.0/',
+            u'Target': {
+                u'Identifier': {
+                    u'IDScheme': target_id_schema,
+                    u'IDURL': target_url,
+                    u'ID': target_id
                 },
-                "Type": {
-                    "Name": "software"
+                u'Type': {
+                    u'Name': u'software'
                 }
             },
-            "LinkPublicationDate": "2018-10-23",
-            "LinkProvider": [
+            u'LinkPublicationDate': now.strftime("%Y-%m-%d"),
+            u'LinkProvider': [
                 {
-                    "Name": "SAO/NASA Astrophysics Data System"
+                    u'Name': u'SAO/NASA Astrophysics Data System'
                 }
             ]
         }]
