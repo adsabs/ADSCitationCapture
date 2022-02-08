@@ -32,7 +32,7 @@ app.conf.CELERY_QUEUES = (
 )
 
 #limit github API queries to keep below rate limit
-github_api_limit = app.conf.get('GITHUB_API_LIMIT', '4800/h')
+github_api_limit = app.conf.get('GITHUB_API_LIMIT', '80/m')
 
 # ============================= TASKS ============================================= #
 
@@ -168,6 +168,10 @@ def task_process_github_urls(citation_change, metadata):
         status = "DISCARDED"
     parsed_metadata = {'link_alive': is_link_alive, 'doctype': "unknown", 'license_name': license_info.get('license_name', ""), 'license_url': license_info.get('license_url', "") }
     
+    #Confirm citation hasn't been added to database as TOF between calling task and when task can actually be executed is potentially quite long.
+    metadata = db.get_citation_target_metadata(app, citation_change.content)
+    citation_target_in_db = bool(metadata) # False if dict is empty
+
     #Saves citations to database, and emits citations with "EMITTABLE"
     if status is not None:
         if not citation_target_in_db:
