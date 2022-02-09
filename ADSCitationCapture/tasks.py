@@ -152,6 +152,7 @@ def task_process_github_urls(citation_change, metadata):
     Emit to broker only if it is EMITTABLE
     Do not forward to Master
     """
+    logger.info("Processing citation to github url: {}".format(citation_change.content))
     github_api_mode = app.conf.get('GITHUB_API_MODE', False)
     citation_target_in_db = bool(metadata) # False if dict is empty
     raw_metadata = metadata.get('raw', None)
@@ -166,6 +167,7 @@ def task_process_github_urls(citation_change, metadata):
             license_info = api.get_github_metadata(app, citation_change.content)
     elif not url.is_github(citation_change.content):
         status = "DISCARDED"
+        logger.debug("Citation to github url {} discarded".format(citation_change.content))
     parsed_metadata = {'link_alive': is_link_alive, 'doctype': "unknown", 'license_name': license_info.get('license_name', ""), 'license_url': license_info.get('license_url', "") }
     
     #Confirm citation hasn't been added to database as TOF between calling task and when task can actually be executed is potentially quite long.
