@@ -43,7 +43,7 @@ def is_github(url):
     try:
         domain = urllib.parse.urlparse(url).hostname
 
-    except:
+    except Exception as e:
         msg = "Failed to verify {}".format(url)
         logger.exception(msg)
         raise
@@ -54,7 +54,7 @@ def is_gist(url):
     try:
         domain = urllib.parse.urlparse(url).hostname
 
-    except:
+    except Exception as e:
         msg = "Failed to verify {}".format(url)
         logger.exception(msg)
         raise
