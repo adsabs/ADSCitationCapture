@@ -54,7 +54,7 @@ def run_migrations_offline():
         context.run_migrations()
 
 def get_app_config(key):
-    print('Getting actual config for', key, app_conf.get(key,""))
+    print('Getting actual config for', key, app_conf.get(key, ""))
     return app_conf.get(key)
 
 def run_migrations_online():
