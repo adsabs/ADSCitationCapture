@@ -388,45 +388,20 @@ def populate_bibcode_column(main_session, curated = True):
     Pulls all citation targets from DB and populates the bibcode column using parsed metadata
     """
     logger.debug("Collecting Citation Targets")
-    records = _get_citation_targets_alembic(main_session, only_status = None)
+    records = _get_citation_targets_session(main_session, only_status = 'REGISTERED')
     for record in records:
         content = record.get('content', None)
         logger.debug("Collecting metadata for {}".format(record.get('content')))
-        metadata = _get_citation_target_metadata_alembic(main_session, content, curate = curated)
+        citation_in_db = False
+        metadata = {}
+        metadata = _get_citation_target_metadata_session(main_session, content, citation_in_db, metadata, curate=curated)
         if metadata:
             logger.debug("Updating Bibcode field for {}".format(record.get('content')))
             raw_metadata = metadata.get('raw', {})
             parsed_metadata = metadata.get('parsed', {})
             curated_metadata = metadata.get('curated',{})
             status = metadata.get('status', None)
-            _update_citation_target_metadata_alembic(main_session, content, raw_metadata, parsed_metadata, curated_metadata, status)
+            metadata_updated = False
+            if not bibcode: bibcode = parsed_metadata.get('bibcode', None)
+            _update_citation_target_metadata_session(main_session, content, raw_metadata, parsed_metadata, curated_metadata, status, bibcode)
 
-def _update_citation_target_metadata_alembic(session, content, raw_metadata, parsed_metadata, curated_metadata = {}, status=None, bibcode = None):
-    """
-    Update metadata for a citation target when we do not need to
-    close the session after completion
-    """
-    metadata_updated = False
-    if not bibcode: bibcode = parsed_metadata.get('bibcode', None)
-    metadata_updated = _update_citation_target_metadata_session(session, content, raw_metadata, parsed_metadata, curated_metadata, status, bibcode)    
-    return metadata_updated
-            
-def _get_citation_target_metadata_alembic(session, doi, curate=True):
-    """
-    If the citation target already exists in the database, return the raw and
-    parsed metadata together with the status of the citation target in the
-    database.
-    If not, return an empty dictionary. 
-    Variation for when the function does not need to control the session
-    """
-    citation_in_db = False
-    metadata = {}
-    return _get_citation_target_metadata_session(session, doi, citation_in_db, metadata, curate)
-
-def _get_citation_targets_alembic(session, only_status='REGISTERED'):
-    """
-    Return a list of dict with all citation targets (or only the registered ones)
-    - Records without a bibcode in the database will not be returned
-    Variation for then the function does not need to control the session.
-    """
-    return _get_citation_targets_session(session, only_status)
