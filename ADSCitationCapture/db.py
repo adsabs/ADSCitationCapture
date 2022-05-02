@@ -2,6 +2,7 @@ import os
 from psycopg2 import IntegrityError
 from dateutil.tz import tzutc
 from ADSCitationCapture.models import Citation, CitationTarget, Event
+from ADSCitationCapture import doi
 from adsmsg import CitationChange
 from adsputils import setup_logging
 
@@ -391,7 +392,14 @@ def populate_bibcode_column(main_session):
             raw_metadata = metadata.get('raw', {})
             parsed_metadata = metadata.get('parsed', {})
             curated_metadata = metadata.get('curated',{})
+            modified_metadata = generate_modified_metadata(parsed_metadata, curated_metadata)
             status = metadata.get('status', None)
-            bibcode = parsed_metadata.get('bibcode', None)
+            if curated_metadata:
+                zenodo_bibstem = "zndo"
+                bibcode = doi.build_bibcode(modified_metadata, doi.zenodo_doi_re, zenodo_bibstem)
+                bibcode = parsed_metadata['bibcode'][:4] + bibcode[4:]
+            else:
+                bibcode = parsed_metadata.get('bibcode',None)
+
             _update_citation_target_metadata_session(main_session, content, raw_metadata, parsed_metadata, curated_metadata, status, bibcode)
 
