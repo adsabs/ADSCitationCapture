@@ -711,11 +711,11 @@ def maintenance_show_metadata(curated_entries):
                 logger.error(msg)
 
 @app.task(queue='maintenance_metadata')
-def task_maintenance_repopulate_bibcode_columns(curated = True):
+def task_maintenance_repopulate_bibcode_columns():
     """
     Re-populates bibcode column with current canonical bibcode
     """
-    db.populate_bibcode_column(app, curated)
+    db.populate_bibcode_column(app)
 
 @app.task(queue='maintenance_resend')
 def task_maintenance_resend(dois, bibcodes, broker):

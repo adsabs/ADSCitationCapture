@@ -74,16 +74,6 @@ def _update_citation_target_metadata_session(session, content, raw_metadata, par
     if citation_target.raw_cited_metadata != raw_metadata or citation_target.parsed_cited_metadata != parsed_metadata or \
             (status is not None and citation_target.status != status) or citation_target.curated_metadata != curated_metadata or \
         citation_target.bibcode != bibcode:
-        if citation_target.raw_cited_metadata != raw_metadata:
-            logger.debug("raw_metadata changed")
-        if citation_target.parsed_cited_metadata != parsed_metadata:
-            logger.debug("parsed_metadata changed")
-        if (status is not None and citation_target.status != status):
-            logger.debug("status changed")
-        if citation_target.curated_metadata != curated_metadata:
-            logger.debug("curated_metadata changed")
-        if citation_target.bibcode != bibcode:
-            logger.debug("bibcode changed")
         citation_target.raw_cited_metadata = raw_metadata
         citation_target.parsed_cited_metadata = parsed_metadata
         citation_target.curated_metadata = curated_metadata
@@ -383,25 +373,25 @@ def mark_all_discarded_citations_as_registered(app, content):
             session.add(citation)
         session.commit()
 
-def populate_bibcode_column(main_session, curated = True):
+def populate_bibcode_column(main_session):
     """
     Pulls all citation targets from DB and populates the bibcode column using parsed metadata
     """
     logger.debug("Collecting Citation Targets")
-    records = _get_citation_targets_session(main_session, only_status = 'REGISTERED')
+    records = _get_citation_targets_session(main_session, only_status = None)
     for record in records:
         content = record.get('content', None)
+        bibcode = record
         logger.debug("Collecting metadata for {}".format(record.get('content')))
         citation_in_db = False
         metadata = {}
-        metadata = _get_citation_target_metadata_session(main_session, content, citation_in_db, metadata, curate=curated)
+        metadata = _get_citation_target_metadata_session(main_session, content, citation_in_db, metadata, curate=False)
         if metadata:
             logger.debug("Updating Bibcode field for {}".format(record.get('content')))
             raw_metadata = metadata.get('raw', {})
             parsed_metadata = metadata.get('parsed', {})
             curated_metadata = metadata.get('curated',{})
             status = metadata.get('status', None)
-            metadata_updated = False
-            if not bibcode: bibcode = parsed_metadata.get('bibcode', None)
+            bibcode = parsed_metadata.get('bibcode', None)
             _update_citation_target_metadata_session(main_session, content, raw_metadata, parsed_metadata, curated_metadata, status, bibcode)
 
