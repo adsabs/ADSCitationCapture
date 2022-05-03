@@ -394,6 +394,7 @@ def populate_bibcode_column(main_session):
             curated_metadata = metadata.get('curated',{})
             modified_metadata = generate_modified_metadata(parsed_metadata, curated_metadata)
             status = metadata.get('status', None)
+            #Allows for the column to be repopulated even if curated_metadata exists.
             if curated_metadata:
                 zenodo_bibstem = "zndo"
                 bibcode = doi.build_bibcode(modified_metadata, doi.zenodo_doi_re, zenodo_bibstem)
