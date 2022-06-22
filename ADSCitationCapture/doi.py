@@ -182,9 +182,13 @@ def renormalize_author_names(authors):
     to renormalize author names from curated metadata.
     """
     normalized_author_names = []
-    for name in authors:
-        norm_author_name = dc.author_names._normalize(name, collaborations_params=dc.author_collaborations_params)
-        normalized_author_names.append(norm_author_name)
+    try:
+        for name in authors:
+            norm_author_name = dc.author_names._normalize(name, collaborations_params=dc.author_collaborations_params)
+            normalized_author_names.append(norm_author_name)
+    except Exception as e:
+        logger.error("Failed to normalize author names with error: {e}")
+    
     return normalized_author_names
 
 def _parse_metadata_zenodo_doi(raw_metadata):

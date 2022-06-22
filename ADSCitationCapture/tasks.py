@@ -622,7 +622,12 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
         try:
             if not reset:
                 if 'authors' in curated_entry.keys():
-                    curated_entry['normalized_authors'] = doi.renormalize_author_names(curated_entry.get('authors', None))
+                    if isinstance(curated_entry.get('authors', []), list):
+                        curated_entry['normalized_authors'] = doi.renormalize_author_names(curated_entry.get('authors', None))
+                    else:
+                        logger.error("'author' key is not a list of authors. Stopping.")
+                        err = "'authors' is not a valid list of strings"
+                        raise TypeError(err)
                 #only check old metadata if we are adding updates, otherwise ignore.
                 if curated_entry != registered_record.get('curated_metadata'):
                     for key in registered_record['curated_metadata'].keys():
@@ -645,8 +650,14 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                 parsed_metadata['alternate_bibcode'] = registered_record.get('alternate_bibcode', [])
                 #checks for provided alt bibcodes from manual curation
                 if 'alternate_bibcode' in curated_entry.keys():
-                    alternate_bibcode = list(set(alternate_bibcode+curated_entry['alternate_bibcode']))
-                    logger.debug('alternate bibcodes are {}'.format(alternate_bibcode))
+                    if isinstance(curated_entry.get('alternate_bibcode', []), list):
+                        alternate_bibcode = list(set(alternate_bibcode+curated_entry['alternate_bibcode']))
+                        logger.debug('alternate bibcodes are {}'.format(alternate_bibcode))
+                    else:
+                        logger.error("'author' key is not a list of authors. Stopping.")
+                        err = "'alternate_bibcodes' is not a valid list of bibcodes"
+                        raise TypeError(err)
+
                 #checks to make sure the main bibcode is not in the alt bibcodes
                 try:
                     alternate_bibcode.remove(modified_metadata.get('bibcode'))
@@ -669,7 +680,7 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                     #updates curated entry alt bibcodes only if a new bibcode is generated due to manual curation
                     curated_entry['alternate_bibcode'] = alternate_bibcode
                     #marks bibcode as replaced
-                    bibcode_replaced = {'previous': registered_record['bibcode'], 'new': parsed_metadata['bibcode'] }
+                    bibcode_replaced = {'previous': registered_record['bibcode'], 'new': new_bibcode}
                 #sets modified metadata alt bibcodes to match the full list of alt bibcodes.
                 modified_metadata['alternate_bibcode'] = alternate_bibcode
                    
@@ -731,7 +742,7 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
             else:
                 logger.warn("Curated metadata did not result in a change to recorded metadata for {}.".format(registered_record.get('content')))
         except Exception as e:
-            logger.error("task_maintenance_curation Failed to update metadata for {} with Exception: {}. Please check that the bibcode or doi matches a target record.".format(curated_entry, e))
+            logger.error("task_maintenance_curation Failed to update metadata for {} with Exception: {}. Please check the input data and try again.".format(curated_entry, e))
             raise
 
 def maintenance_show_metadata(curated_entries):
