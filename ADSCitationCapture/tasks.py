@@ -622,6 +622,7 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
         try:
             if not reset:
                 if 'authors' in curated_entry.keys():
+                    #checks to make sure authors are in a list. Errors out if not.
                     if isinstance(curated_entry.get('authors', []), list):
                         curated_entry['normalized_authors'] = doi.renormalize_author_names(curated_entry.get('authors', None))
                     else:
@@ -650,11 +651,12 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                 parsed_metadata['alternate_bibcode'] = registered_record.get('alternate_bibcode', [])
                 #checks for provided alt bibcodes from manual curation
                 if 'alternate_bibcode' in curated_entry.keys():
+                    #checks to make sure alternate_bibcodes are in a list. Errors out if not.
                     if isinstance(curated_entry.get('alternate_bibcode', []), list):
                         alternate_bibcode = list(set(alternate_bibcode+curated_entry['alternate_bibcode']))
                         logger.debug('alternate bibcodes are {}'.format(alternate_bibcode))
                     else:
-                        logger.error("'author' key is not a list of authors. Stopping.")
+                        logger.error("'alternate_bibcodes' key is not a list of alternate_bibcodes. Stopping.")
                         err = "'alternate_bibcodes' is not a valid list of bibcodes"
                         raise TypeError(err)
 
