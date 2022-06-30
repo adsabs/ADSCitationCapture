@@ -340,7 +340,7 @@ def generate_modified_metadata(parsed_metadata, curated_entry):
     if not modified_metadata.get('alternate_bibcode', None): modified_metadata.update({'alternate_bibcode':[]})
     for key in curated_entry.keys():
         if key not in ['bibcode', 'doi', 'error']:
-            if key in modified_metadata.keys() and key:
+            if key in modified_metadata.keys():
                 try:
                     modified_metadata[key] = curated_entry[key]
                 except Exception as e:
