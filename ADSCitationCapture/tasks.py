@@ -633,7 +633,7 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                 if curated_entry != registered_record.get('curated_metadata'):
                     for key in registered_record['curated_metadata'].keys():
                         #first apply any previous edits to metadata that are not overwritten by new metadata.
-                        if key not in curated_entry.keys():
+                        if key != "error" and key not in curated_entry.keys():
                             curated_entry[key] = registered_record['curated_metadata'][key]
                 else:
                     logger.warn("Supplied metadata is identical to previously added metadata. No updates will occur.")
@@ -744,7 +744,11 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
             else:
                 logger.warn("Curated metadata did not result in a change to recorded metadata for {}.".format(registered_record.get('content')))
         except Exception as e:
-            logger.error("task_maintenance_curation Failed to update metadata for {} with Exception: {}. Please check the input data and try again.".format(curated_entry, e))
+            err = "task_maintenance_curation Failed to update metadata for {} with Exception: {}. Please check the input data and try again.".format(curated_entry, e)
+            err_dict = registered_record.get('curated_metadata')
+            err_dict['error'] = err
+            db.update_citation_target_curator_message(app, registered_record['content'], err_dict)
+            logger.error(err)
             raise
 
 def maintenance_show_metadata(curated_entries):
@@ -767,9 +771,13 @@ def maintenance_show_metadata(curated_entries):
                                                     timestamp=datetime.now()
                                                     )
             try:
-                parsed_metadata = db.get_citation_target_metadata(app, custom_citation_change.content).get('parsed', None)
-                if parsed_metadata:
-                    print(json.dumps(parsed_metadata))
+                metadata = db.get_citation_target_metadata(app, custom_citation_change.content)
+                parsed = metadata.get('parsed', None)
+                curated = metadata.get('curated', None)
+                if parsed:
+                    print(json.dumps(parsed))
+                if "error" in curated.keys():
+                    print("\n The most recent attempt to curate metadata failed with the following error: {}".format(curated.get("error", "")))
 
             except Exception as e:
                 msg = "Failed to load metadata for citation {}. Please confirm information is correct and citation target is in database.".format(curated_entry)
@@ -789,11 +797,14 @@ def maintenance_show_metadata(curated_entries):
                                                     status=adsmsg.Status.updated,
                                                     timestamp=datetime.now()
                                                     )
-            parsed_metadata = db.get_citation_target_metadata(app, custom_citation_change.content).get('parsed', None)
             try:
-                parsed_metadata = db.get_citation_target_metadata(app, custom_citation_change.content).get('parsed', None)
-                if parsed_metadata:
-                    print(json.dumps(parsed_metadata))
+                metadata = db.get_citation_target_metadata(app, custom_citation_change.content)
+                parsed = metadata.get('parsed', None)
+                curated = metadata.get('curated', None)
+                if parsed:
+                    print(json.dumps(parsed))
+                if "error" in curated.keys():
+                    print("\n The most recent attempt to curate metadata failed with the following error: {}".format(curated.get("error", "")))
 
             except Exception as e:
                 msg = "Failed to load metadata for citation {}. Please confirm information is correct and citation target is in database.".format(curated_entry)
