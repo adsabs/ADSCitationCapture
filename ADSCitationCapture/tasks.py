@@ -745,10 +745,10 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                 logger.warn("Curated metadata did not result in a change to recorded metadata for {}.".format(registered_record.get('content')))
         except Exception as e:
             err = "task_maintenance_curation Failed to update metadata for {} with Exception: {}. Please check the input data and try again.".format(curated_entry, e)
-            err_dict = registered_record.get('curated_metadata')
+            err_dict = registered_record.get('curated_metadata', {})
             err_dict['error'] = err
             db.update_citation_target_curator_message(app, registered_record['content'], err_dict)
-            logger.error(err)
+            logger.exception(err)
             raise
 
 def maintenance_show_metadata(curated_entries):
