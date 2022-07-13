@@ -601,15 +601,16 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
         
         #Try by doi.
         if curated_entry.get('doi'):
-            registered_record = db.get_citation_targets_by_doi(app, [curated_entry.get('doi')], only_status='REGISTERED')[0]           
+            registered_records = db.get_citation_targets_by_doi(app, [curated_entry.get('doi')], only_status='REGISTERED')          
         #If not, retrieve entry by bibcode.
         elif curated_entry.get('bibcode'):
-            registered_record = db.get_citation_targets_by_bibcode(app, [curated_entry.get('bibcode')], only_status='REGISTERED')[0]   
+            registered_records = db.get_citation_targets_by_bibcode(app, [curated_entry.get('bibcode')], only_status='REGISTERED')
         #report error
         else:
             logger.error('Unable to retrieve entry for {} from database. Please check input file.'.format(curated_entry))
         
-        if registered_record:
+        if registered_records:
+            registered_record = registered_records[0]
             metadata = db.get_citation_target_metadata(app, registered_record.get('content', ''), curate=False)
             raw_metadata = metadata.get('raw', '')
             parsed_metadata = metadata.get('parsed', '')
