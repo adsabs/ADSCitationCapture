@@ -708,10 +708,11 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                                 alternate_bibcode.append(registered_record.get('bibcode'))
                             #set bibcode replaced if necessary
                             bibcode_replaced = {'previous': registered_record['bibcode'], 'new': parsed_metadata['bibcode'] }
-                        #set alt bibcodes to full list but try and remove main bibcode from alt list
+                        #set alt bibcodes to full list but try and remove canonical bibcode from alt list
                         try:
                             alternate_bibcode.remove(parsed_metadata.get('bibcode'))
                         except:
+                            #we pass because this just means the canonical bibcode is not in the list of alt bibcodes
                             pass
                         parsed_metadata['alternate_bibcode'] = list(set(alternate_bibcode))
                         #reset modified metadata
@@ -764,9 +765,9 @@ def maintenance_show_metadata(curated_entries):
         if curated_entry.get('doi'):
             try:
                 registered_record = db.get_citation_targets_by_doi(app, [curated_entry.get('doi')], only_status='REGISTERED')[0]   
-            except Exception as e:
+            except Exception:
                 msg = "Failed to retrieve citation target {}. Please confirm information is correct and citation target is in database.".format(curated_entry)
-                logger.error(msg)
+                logger.exception(msg)
                 raise Exception(msg)
 
             custom_citation_change = adsmsg.CitationChange(content=registered_record['content'],
@@ -783,17 +784,17 @@ def maintenance_show_metadata(curated_entries):
                 if "error" in curated.keys():
                     print("\n The most recent attempt to curate metadata failed with the following error: {}".format(curated.get("error", "")))
 
-            except Exception as e:
+            except Exception:
                 msg = "Failed to load metadata for citation {}. Please confirm information is correct and citation target is in database.".format(curated_entry)
-                logger.error(msg)
+                logger.exception(msg)
             
         #If no doi, try and retrieve entry by bibcode.
         elif curated_entry.get('bibcode'):
             try:
                 registered_record = db.get_citation_targets_by_bibcode(app, [curated_entry.get('bibcode')], only_status='REGISTERED')[0]   
-            except Exception as e:
+            except Exception:
                 msg = "Failed to retrieve citation target {}. Please confirm information is correct and citation target is in database.".format(curated_entry)
-                logger.error(msg)
+                logger.exception(msg)
                 raise Exception(msg)
 
             custom_citation_change = adsmsg.CitationChange(content=registered_record['content'],
@@ -810,9 +811,9 @@ def maintenance_show_metadata(curated_entries):
                 if "error" in curated.keys():
                     print("\n The most recent attempt to curate metadata failed with the following error: {}".format(curated.get("error", "")))
 
-            except Exception as e:
+            except Exception:
                 msg = "Failed to load metadata for citation {}. Please confirm information is correct and citation target is in database.".format(curated_entry)
-                logger.error(msg)
+                logger.exception(msg)
 
 @app.task(queue='maintenance_metadata')
 def task_maintenance_repopulate_bibcode_columns():
