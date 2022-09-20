@@ -2,8 +2,8 @@ import os
 from psycopg2 import IntegrityError
 from dateutil.tz import tzutc
 from ADSCitationCapture.models import Citation, CitationTarget, Event
+from adsmsg import CitationChange, CitationChangeContentType
 from ADSCitationCapture import doi
-from adsmsg import CitationChange
 from adsputils import setup_logging
 
 # ============================= INITIALIZATION ==================================== #
@@ -17,7 +17,6 @@ config = load_config(proj_home=proj_home)
 logger = setup_logging(__name__, proj_home=proj_home,
                         level=config.get('LOGGING_LEVEL', 'INFO'),
                         attach_stdout=config.get('LOG_STDOUT', False))
-
 
 # =============================== FUNCTIONS ======================================= #
 def store_event(app, data):
@@ -73,6 +72,10 @@ def _update_citation_target_metadata_session(session, content, raw_metadata, par
             raw_metadata = raw_metadata.decode('utf-8')
         except UnicodeEncodeError:
             pass
+
+    if status == 'SANITIZED':
+        #reset status but otherwise leave the citation target alone
+        citation_target.status = status
     if citation_target.raw_cited_metadata != raw_metadata or citation_target.parsed_cited_metadata != parsed_metadata or \
             (status is not None and citation_target.status != status) or citation_target.curated_metadata != curated_metadata or \
         citation_target.bibcode != bibcode or citation_target.associated_works != associated:
@@ -122,7 +125,7 @@ def update_citation_target_curator_message(app, content, msg):
         msg_updated =  _update_citation_target_curator_message_session(session, content, msg)
     return msg_updated
 
-def store_citation(app, citation_change, content_type, raw_metadata, parsed_metadata, status):
+def store_citation(app, citation_change, raw_content, content_type, raw_metadata, parsed_metadata, status):
     """
     Stores a new citation in the DB
     """
@@ -132,6 +135,7 @@ def store_citation(app, citation_change, content_type, raw_metadata, parsed_meta
         citation.citing = citation_change.citing
         citation.cited = citation_change.cited
         citation.content = citation_change.content
+        citation.raw_content = raw_content
         citation.resolved = citation_change.resolved
         citation.timestamp = citation_change.timestamp.ToDatetime().replace(tzinfo=tzutc())
         citation.status = status
@@ -322,14 +326,30 @@ def get_citations_by_bibcode(app, bibcode):
                 citations = get_citations(app, dummy_citation_change)
     return citations
 
-def get_citations(app, citation_change):
+def get_citations(app, citation_change, status='REGISTERED'):
     """
     Return all the citations (bibcodes) to a given content.
-    It will ignore DELETED and DISCARDED citations.
+    It will ignore DELETED and DISCARDED citations by default.
     """
     with app.session_scope() as session:
-        citation_bibcodes = [r.citing for r in session.query(Citation).filter_by(content=citation_change.content, status="REGISTERED").all()]
+        citation_bibcodes = [r.citing for r in session.query(Citation).filter_by(content=citation_change.content, status=status).all()]
     return citation_bibcodes
+
+def get_citation_data(app, citing_bibcode, content):
+    """
+    Get the data for given citation
+    """
+    with app.session_scope() as session:
+        citation_change = session.query(Citation).filter_by(content=content, citing=citing_bibcode).first()
+        if citation_change:
+            citation = Citation()
+            citation.citing = citation_change.citing
+            citation.cited = citation_change.cited
+            citation.content = citation_change.content
+            citation.resolved = citation_change.resolved
+            citation.timestamp = citation_change.timestamp
+            citation.status = citation_change.status
+    return citation
 
 def generate_modified_metadata(parsed_metadata, curated_entry):
     """
@@ -385,6 +405,43 @@ def update_citation(app, citation_change):
             logger.info("Ignoring citation update (citing '%s', content '%s' and timestamp '%s') because received timestamp is equal/older than timestamp in database", citation_change.citing, citation_change.content, citation_change.timestamp.ToJsonString())
     return updated
 
+def citation_data_to_citation_change(citation_data, previously_discarded_record):
+    """
+    Takes data from a citation and converts it into a citation_change.
+    """
+    citation_change = CitationChange()
+    citation_change.content_type = getattr(CitationChangeContentType, previously_discarded_record['content_type'].lower())
+    citation_change.content = citation_data.content
+    citation_change.citing = citation_data.citing
+    citation_change.cited = citation_data.cited
+    citation_change.resolved = citation_data.resolved
+    citation_change.timestamp.FromDatetime(citation_data.timestamp)
+
+    return citation_change
+
+def update_citation_content(app, citation_change, raw_content):
+    """
+    Update citation record information
+    """
+    updated = False
+    with app.session_scope() as session:
+        citation = session.query(Citation).with_for_update().filter_by(citing=citation_change.citing, content=raw_content).first()
+        if citation:
+            if citation.timestamp < citation_change.timestamp:
+                #citation.citing = citation_change.citing # This should not change
+                citation.raw_content = raw_content
+                citation.content = citation_change.content
+                session.add(citation)
+                session.commit()
+                updated = True
+                logger.info("Updated citation (citing '%s', content '%s' and timestamp '%s')", citation_change.citing, citation_change.content, citation_change.timestamp.ToJsonString())
+            else:
+                logger.info("Ignoring citation update (citing '%s', content '%s' and timestamp '%s') because received timestamp is equal/older than timestamp in database", citation_change.citing, citation_change.content, citation_change.timestamp.ToJsonString())
+        else:
+            logger.info("Unable to update citation (citing '%s', content '%s' and timestamp '%s')", citation_change.citing, citation_change.content, citation_change.timestamp.ToJsonString())
+
+    return updated
+
 def mark_citation_as_deleted(app, citation_change):
     """
     Update status to DELETED for a given citation
@@ -416,6 +473,46 @@ def mark_all_discarded_citations_as_registered(app, content):
         citations = session.query(Citation).with_for_update().filter_by(status='DISCARDED', content=content).all()
         for citation in citations:
             citation.status = 'REGISTERED'
+            session.add(citation)
+        session.commit()
+
+def mark_sanitized_citation(app, citing, content, raw_content, status='SANITIZED'):
+    """
+    Update status to SANITIZED for a single discarded citation
+    """
+    marked_as_registered = False
+    previous_status = None
+    with app.session_scope() as session:
+        citation = session.query(Citation).with_for_update().filter_by(status='DISCARDED', citing=citing, content=raw_content).first()
+        citation.status = status
+        citation.content = content
+        citation.raw_content = raw_content
+        session.add(citation)
+        session.commit()
+
+def mark_all_discarded_citations_as_sanitized(app, content):
+    """
+    Update status to SANITIZED for all discarded citations of a given content
+    """
+    marked_as_registered = False
+    previous_status = None
+    with app.session_scope() as session:
+        citations = session.query(Citation).with_for_update().filter_by(status='DISCARDED', content=content).all()
+        for citation in citations:
+            citation.status = 'SANITIZED'
+            session.add(citation)
+        session.commit()
+
+def mark_all_sanitized_citations_as_discarded(app, content):
+    """
+    Update status to DISCARDED for all sanitized citations of a given content
+    """
+    marked_as_registered = False
+    previous_status = None
+    with app.session_scope() as session:
+        citations = session.query(Citation).with_for_update().filter_by(status='SANITIZED', content=content).all()
+        for citation in citations:
+            citation.status = 'SANITIZED'
             session.add(citation)
         session.commit()
 

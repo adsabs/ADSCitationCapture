@@ -13,8 +13,8 @@ Base = declarative_base()
 
 citation_content_type = ENUM('DOI', 'PID', 'URL', name='citation_content_type')
 citation_change_type = ENUM('NEW', 'DELETED', 'UPDATED', name='citation_change_type')    
-citation_status_type = ENUM('EMITTABLE','REGISTERED', 'DELETED', 'DISCARDED', name='citation_status_type')
-target_status_type = ENUM('EMITTABLE','REGISTERED', 'DELETED', 'DISCARDED', name='target_status_type')
+citation_status_type = ENUM('EMITTABLE','REGISTERED', 'DELETED', 'DISCARDED', 'SANITIZED', name='citation_status_type')
+target_status_type = ENUM('EMITTABLE','REGISTERED', 'DELETED', 'DISCARDED', 'SANITIZED', name='target_status_type')
 
         
 class RawCitation(Base):
@@ -53,6 +53,7 @@ class Citation(Base):
     )
     __versioned__ = {}  # Must be added to all models that are to be versioned
     id = Column(Integer, primary_key=True)
+    raw_content = Column(Text())
     content = Column(Text(), ForeignKey('public.citation_target.content'))
     citing = Column(Text())                         # Bibcode of the article that is citing a target
     cited = Column(Text())                          # Probably not necessary to keep

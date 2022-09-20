@@ -318,8 +318,8 @@ if __name__ == '__main__':
     maintenance_parser.add_argument(
                         '--json',
                         dest='json_payload',
-                        nargs='+',
                         action='store',
+                        nargs='+',
                         default=None,
                         help='Space delimited list of json curated metadata')
     maintenance_parser.add_argument('--input_filename',
