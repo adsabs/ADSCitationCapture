@@ -22,7 +22,7 @@ logger = setup_logging(__name__, proj_home=proj_home,
 
 #Dictionary that defines the output files for ADSDataPipeline
 file_names=OrderedDict()
-file_names['bibcode'] =proj_home+'/logs/output/bibcodes_CC.can.list'
+file_names['bibcode'] =proj_home+'/logs/output/bibcodes_CC.list.can'
 file_names['citations'] = proj_home+'/logs/output/citations_CC.list'
 file_names['references'] = proj_home+'/logs/output/references_CC.list'
 file_names['authors'] = proj_home+'/logs/output/facet_authors_CC.list'
@@ -152,7 +152,7 @@ def _write_key_citation_target_authors(app, records):
             for rec in records:
                 parsed_metadata = get_citation_target_metadata(app, rec['content']).get('parsed', {})
                 if parsed_metadata:
-                    f.write(str(rec['bibcode'])+"\t"+"\t".join(parsed_metadata.get('authors',''))+"\n")
+                    f.write(str(rec['bibcode'])+"\t"+"\t".join(parsed_metadata.get('normalized_authors',''))+"\n")
 
         logger.info("Wrote file {} to disk.".format('authors'))
     except Exception as e:
@@ -178,7 +178,7 @@ def _write_key_citation_reference_data(app, bibcodes):
     except Exception as e:
         logger.exception("Failed to write files {} and {}.".format(file_names['citations']+".tmp", file_names['references']+".tmp"))
         raise Exception("Failed to write files {} and {}.".format(file_names['citations']+".tmp", file_names['references']+".tmp"))
-        
+
 def _update_citation_target_curator_message_session(session, content, msg):
     """
     Actual calls to database session for update_citation_target_metadata
