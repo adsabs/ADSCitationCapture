@@ -135,8 +135,13 @@ def write_citation_target_data(app, only_status=None):
         logger.info("Writing author data for {} records".format(len(records)))
         _write_key_citation_target_authors(app, records)
         for file in file_names:
-            os.system('cp {} {}'.format(file+".tmp", file))
-            logger.debug("Copied {}.tmp to {}".format(file, file))
+            status = os.system('cp {} {}'.format(file_names[file]+".tmp", file_names[file]))
+            if status == 0:    
+                logger.info("Copied {}.tmp to {}".format(file_names[file], file_names[file]))
+                os.system('rm {}'.format(file_names[file]+".tmp"))
+                logger.debug('Removed {}.tmp file from /app/logs/output/'.format(file_names[file]))
+            else:
+                logger.warning("Copying file: {} Failed with exit code: {}".format(file_names[file], status))
 
 def _write_key_citation_target_authors(app, records):
     """
@@ -173,6 +178,7 @@ def _write_key_citation_reference_data(app, bibcodes):
     except Exception as e:
         logger.exception("Failed to write files {} and {}.".format(file_names['citations']+".tmp", file_names['references']+".tmp"))
         raise Exception("Failed to write files {} and {}.".format(file_names['citations']+".tmp", file_names['references']+".tmp"))
+        
 def _update_citation_target_curator_message_session(session, content, msg):
     """
     Actual calls to database session for update_citation_target_metadata
