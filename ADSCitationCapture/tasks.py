@@ -559,17 +559,17 @@ def task_maintenance_metadata(dois, bibcodes, reset=False):
                 # Detect concept DOIs: they have one or more versions of the software
                 # and they are not a version of something else
                 concept_doi = len(parsed_metadata.get('version_of', [])) == 0 and len(parsed_metadata.get('versions', [])) >= 1
+                if concept_doi: 
+                    parsed_metadata['pubdate']=registered_record['pubdate']
                 different_bibcodes = registered_record['bibcode'] != parsed_metadata['bibcode']
-                if different_bibcodes:
+                if different_bibcodes and concept_doi:
                     # Concept DOI publication date changes with newer software version
                     # and authors can also change (i.e., first author last name initial)
                     # but we want to respect the year in the bibcode, which corresponds
                     # to the year of the latest release when it was first ingested
                     # by ADS
-                    #parsed_metadata['bibcode'] = registered_record['bibcode']
                     parsed_metadata['bibcode'] = registered_record['bibcode'][:4] + parsed_metadata['bibcode'][4:]
-                    # Temporary bugfix (some bibcodes have non-capital letter at the end):
-                    parsed_metadata['bibcode'] = parsed_metadata['bibcode'][:-1] + parsed_metadata['bibcode'][-1].upper()
+                    parsed_metadata['bibcode'] = parsed_metadata['bibcode'][:-1] + parsed_metadata['bibcode'][-1].upper()                   
                     # Re-verify if bibcodes are still different (they could be if
                     # name parsing has changed):
                     different_bibcodes = registered_record['bibcode'] != parsed_metadata['bibcode']
