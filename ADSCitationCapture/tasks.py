@@ -560,7 +560,7 @@ def task_maintenance_metadata(dois, bibcodes, reset=False):
                 # and they are not a version of something else
                 concept_doi = len(parsed_metadata.get('version_of', [])) == 0 and len(parsed_metadata.get('versions', [])) >= 1
                 if concept_doi: 
-                    concept_metadata=db.get_citation_target_metadata(app, doi, curate=True, concept=concept_doi)
+                    concept_metadata=db.get_citation_target_metadata(app, registered_record['content'], curate=True, concept=concept_doi)['parsed']
                 different_bibcodes = registered_record['bibcode'] != parsed_metadata['bibcode']
                 if different_bibcodes and concept_doi:
                     # Concept DOI publication date changes with newer software version
