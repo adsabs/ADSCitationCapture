@@ -52,7 +52,7 @@ jobs:
       run: |
         py.test
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@master
       with:
         name: coverage-citationcapture
         path: .coverage
