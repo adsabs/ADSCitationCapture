@@ -519,7 +519,7 @@ def task_maintenance_canonical(dois, bibcodes):
         if parsed_metadata:
             logger.debug("Calling 'task_output_results' with '%s'", custom_citation_change)
             task_output_results.delay(custom_citation_change, parsed_metadata, existing_citation_bibcodes, db_versions=registered_record.get('associated_works', {"":""}), readers=readers)
-
+   
 @app.task(queue='maintenance_metadata')
 def task_maintenance_metadata(dois, bibcodes, reset=False):
     """
@@ -560,7 +560,7 @@ def task_maintenance_metadata(dois, bibcodes, reset=False):
                 # and they are not a version of something else
                 concept_doi = len(parsed_metadata.get('version_of', [])) == 0 and len(parsed_metadata.get('versions', [])) >= 1
                 if concept_doi: 
-                    parsed_metadata['pubdate']=registered_record['pubdate']
+                    concept_metadata=db.get_citation_target_metadata(app, doi, curate=True, concept=concept_doi)
                 different_bibcodes = registered_record['bibcode'] != parsed_metadata['bibcode']
                 if different_bibcodes and concept_doi:
                     # Concept DOI publication date changes with newer software version
@@ -568,7 +568,8 @@ def task_maintenance_metadata(dois, bibcodes, reset=False):
                     # but we want to respect the year in the bibcode, which corresponds
                     # to the year of the latest release when it was first ingested
                     # by ADS
-                    parsed_metadata['bibcode'] = registered_record['bibcode'][:4] + parsed_metadata['bibcode'][4:]
+                    parsed_metadata['pubdate'] = concept_metadata['pubdate']
+                    parsed_metadata['bibcode'] = concept_metadata['pubdate'][:4] + parsed_metadata['bibcode'][4:]
                     parsed_metadata['bibcode'] = parsed_metadata['bibcode'][:-1] + parsed_metadata['bibcode'][-1].upper()                   
                     # Re-verify if bibcodes are still different (they could be if
                     # name parsing has changed):
