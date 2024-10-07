@@ -70,7 +70,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade wheel setuptools pip
+        python -m pip install --upgrade wheel
+        pip install pip==24.0 setuptools==56.0.0
         pip install coverage==5.2.1
         pip install coveralls==2.2.0
     - uses: actions/download-artifact@master
