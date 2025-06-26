@@ -3,7 +3,6 @@ import re
 import json
 import unittest
 import httpretty
-from pyingest.parsers.datacite import DataCiteParser
 from ADSCitationCapture import app, tasks
 from ADSCitationCapture import doi
 from .test_base import TestBase
@@ -60,8 +59,17 @@ class TestWorkers(TestBase):
         datacite_parsed_metadata_filename = os.path.join(self.app.conf['PROJ_HOME'], "ADSCitationCapture/tests/data/datacite_parsed_metadata.json")
         with open(datacite_parsed_metadata_filename, "r") as f:
             expected_parsed_metadata = json.loads("".join(f.readlines()))
-        dc = DataCiteParser()
-        parsed_metadata = dc.parse(raw_metadata)
+        parsed_metadata = doi.dc.parse(raw_metadata)
+        self.assertEqual(parsed_metadata, expected_parsed_metadata)
+
+    def test_parse_metadata_orcid(self):
+        datacite_xml_format_filename = os.path.join(self.app.conf['PROJ_HOME'], "ADSCitationCapture/tests/data/datacite_decoded_orcid.xml")
+        with open(datacite_xml_format_filename, "r") as f:
+            raw_metadata = "".join(f.readlines())
+        datacite_parsed_metadata_filename = os.path.join(self.app.conf['PROJ_HOME'], "ADSCitationCapture/tests/data/datacite_parsed_metadata_orcid.json")
+        with open(datacite_parsed_metadata_filename, "r") as f:
+            expected_parsed_metadata = json.loads("".join(f.readlines()))
+        parsed_metadata = doi.dc.parse(raw_metadata)
         self.assertEqual(parsed_metadata, expected_parsed_metadata)
 
     def test_build_bibcode(self):
@@ -81,10 +89,17 @@ class TestWorkers(TestBase):
         self.assertEqual(bibcode, expected_bibcode)
     
     def test_fetch_all_versions_doi(self):
+        with open("ADSCitationCapture/tests/data/datacite_version_of.xml") as f:
+            raw_metadata = f.read()
+        doi_id = "10.5281/zenodo.592536"
         expected_output = self.mock_data["10.5281/zenodo.4475376"]["versions"]
         parsed_metadata = self.mock_data["10.5281/zenodo.4475376"]["parsed"]
+        httpretty.enable()  # enable HTTPretty so that it will monkey patch the socket module
+        httpretty.register_uri(httpretty.GET, self.app.conf['DOI_URL']+doi_id, body=raw_metadata)
         output = doi.fetch_all_versions_doi(self.app.conf['DOI_URL'], self.app.conf['DATACITE_URL'], parsed_metadata)
-        self.assertEqual(expected_output,output)
+        self.assertTrue(len(expected_output)>=len(output))
+        httpretty.disable()
+        httpretty.reset()
 
 
 

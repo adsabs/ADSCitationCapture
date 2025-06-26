@@ -215,7 +215,7 @@ def task_process_updated_citation(citation_change, force=False):
             original_citations = db.get_citations_by_bibcode(app, citation_target_bibcode)
             citations = api.get_canonical_bibcodes(app, original_citations)
             logger.debug("Calling 'task_output_results' with '%s'", citation_change)
-            task_output_results.delay(citation_change, parsed_metadata, citations, db_versions = no_self_ref_versions, readers=readers)
+            task_output_results.delay(citation_change, parsed_metadata, citations, db_versions=no_self_ref_versions, readers=readers)
         logger.debug("Calling '_emit_citation_change' with '%s'", citation_change)
         _emit_citation_change(citation_change, parsed_metadata)
 
@@ -519,7 +519,7 @@ def task_maintenance_canonical(dois, bibcodes):
         if parsed_metadata:
             logger.debug("Calling 'task_output_results' with '%s'", custom_citation_change)
             task_output_results.delay(custom_citation_change, parsed_metadata, existing_citation_bibcodes, db_versions=registered_record.get('associated_works', {"":""}), readers=readers)
-
+   
 @app.task(queue='maintenance_metadata')
 def task_maintenance_metadata(dois, bibcodes, reset=False):
     """
@@ -559,17 +559,18 @@ def task_maintenance_metadata(dois, bibcodes, reset=False):
                 # Detect concept DOIs: they have one or more versions of the software
                 # and they are not a version of something else
                 concept_doi = len(parsed_metadata.get('version_of', [])) == 0 and len(parsed_metadata.get('versions', [])) >= 1
+                if concept_doi: 
+                    concept_metadata=db.get_citation_target_metadata(app, registered_record['content'], curate=True, concept=concept_doi)['parsed']
                 different_bibcodes = registered_record['bibcode'] != parsed_metadata['bibcode']
-                if different_bibcodes:
+                if different_bibcodes and concept_doi:
                     # Concept DOI publication date changes with newer software version
                     # and authors can also change (i.e., first author last name initial)
                     # but we want to respect the year in the bibcode, which corresponds
                     # to the year of the latest release when it was first ingested
                     # by ADS
-                    #parsed_metadata['bibcode'] = registered_record['bibcode']
-                    parsed_metadata['bibcode'] = registered_record['bibcode'][:4] + parsed_metadata['bibcode'][4:]
-                    # Temporary bugfix (some bibcodes have non-capital letter at the end):
-                    parsed_metadata['bibcode'] = parsed_metadata['bibcode'][:-1] + parsed_metadata['bibcode'][-1].upper()
+                    parsed_metadata['pubdate'] = concept_metadata['pubdate']
+                    parsed_metadata['bibcode'] = concept_metadata['pubdate'][:4] + parsed_metadata['bibcode'][4:]
+                    parsed_metadata['bibcode'] = parsed_metadata['bibcode'][:-1] + parsed_metadata['bibcode'][-1].upper()                   
                     # Re-verify if bibcodes are still different (they could be if
                     # name parsing has changed):
                     different_bibcodes = registered_record['bibcode'] != parsed_metadata['bibcode']
@@ -659,7 +660,7 @@ def task_maintenance_metadata(dois, bibcodes, reset=False):
                 citations = api.get_canonical_bibcodes(app, original_citations)
                 readers = db.get_citation_target_readers(app, registered_record['bibcode'], parsed_metadata.get('alternate_bibcode', []))
                 logger.debug("Calling 'task_output_results' with '%s'", citation_change)
-                task_output_results.delay(citation_change, modified_metadata, citations, bibcode_replaced=bibcode_replaced, associated=registered_record.get('associated_works', {"":""}), readers=readers)     
+                task_output_results.delay(citation_change, modified_metadata, citations, bibcode_replaced=bibcode_replaced, db_versions=registered_record.get('associated_works', {"":""}), readers=readers)     
 
 @app.task(queue='maintenance_metadata')
 def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
@@ -821,7 +822,7 @@ def task_maintenance_curation(dois, bibcodes, curated_entries, reset=False):
                         citations = api.get_canonical_bibcodes(app, original_citations)
                         readers = db.get_citation_target_readers(app, registered_record['bibcode'], parsed_metadata.get('alternate_bibcode', []))
                         logger.debug("Calling 'task_output_results' with '%s'", citation_change)
-                        task_output_results.delay(citation_change, modified_metadata, citations, bibcode_replaced=bibcode_replaced, associated=registered_record.get('associated_works', {"":""}), readers=readers)    
+                        task_output_results.delay(citation_change, modified_metadata, citations, bibcode_replaced=bibcode_replaced, db_versions=registered_record.get('associated_works', {"":""}), readers=readers)    
                 else:
                     logger.warn("Curated metadata did not result in a change to recorded metadata for {}.".format(registered_record.get('content')))
             except Exception as e:
@@ -940,7 +941,7 @@ def task_maintenance_resend(dois, bibcodes, broker, only_nonbib=False):
                 # Only update master
                 readers = db.get_citation_target_readers(app, parsed_metadata.get('bibcode',''), parsed_metadata.get('alternate_bibcode', []))
                 logger.debug("Calling 'task_output_results' with '%s'", custom_citation_change)
-                task_output_results.delay(custom_citation_change, parsed_metadata, citations, db_versions = registered_record.get('associated_works',{"":""}), readers=readers, only_nonbib=only_nonbib)
+                task_output_results.delay(custom_citation_change, parsed_metadata, citations, db_versions=registered_record.get('associated_works',{"":""}), readers=readers, only_nonbib=only_nonbib)
 
             else:
                 # Only re-emit to the broker
