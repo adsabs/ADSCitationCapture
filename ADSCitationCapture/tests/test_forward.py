@@ -88,5 +88,6 @@ class TestWorkers(TestBase):
         
         self.assertEqual(bib_record.toJSON(),expect_bib_record)
         self.assertEqual(nonbib_record.toJSON(),expect_nonbib_record)
+
 if __name__ == '__main__':
     unittest.main()

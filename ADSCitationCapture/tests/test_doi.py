@@ -20,6 +20,7 @@ class TestWorkers(TestBase):
         doi_id = "10.5281/zenodo.11020" # software
         expected_response_content = self.mock_data[doi_id]['raw']
         expected_parsed_response = self.mock_data[doi_id]['parsed']
+        expected_parsed_response.pop("database") # We do this because the database is an augmentation to the metadata.
         httpretty.enable()  # enable HTTPretty so that it will monkey patch the socket module
         httpretty.register_uri(httpretty.GET, self.app.conf['DOI_URL']+doi_id, body=expected_response_content)
         raw_metadata = doi.fetch_metadata(self.app.conf['DOI_URL'], self.app.conf['DATACITE_URL'], doi_id)
