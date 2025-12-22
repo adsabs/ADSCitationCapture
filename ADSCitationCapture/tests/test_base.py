@@ -87,6 +87,7 @@ class TestBase(unittest.TestCase):
                     'described_by': [],
                     'abstract': '<p>This is a citable release with a better name.</p>',
                     'versions': [],
+                    'database': ['astronomy'],
                     'doctype': 'software',
                     'forked_from': [],
                     'affiliations': ['', '', '', '', '', '', '', ''],

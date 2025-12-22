@@ -62,6 +62,7 @@ def build_record(app, citation_change, parsed_metadata, citations, db_versions, 
     source = parsed_metadata.get('source', "Unknown")
     version = parsed_metadata.get('version', "")
     doctype = parsed_metadata.get('doctype', "software")
+    collections = parsed_metadata.get('database', ['general', 'astronomy'])
     # Clean abstract and title
     abstract = ''.join(BeautifulSoup(abstract, features="lxml").findAll(text=True)).replace('\n', ' ').replace('\r', '')
     title = ''.join(BeautifulSoup(title, features="lxml").findAll(text=True)).replace('\n', ' ').replace('\r', '')
@@ -96,7 +97,7 @@ def build_record(app, citation_change, parsed_metadata, citations, db_versions, 
         'bibstem_facet': 'zndo',
         'copyright': [],
         'comment': [],
-        'database': ['general', 'astronomy'],
+        'database': collections,
         'entry_date': date2solrstamp(entry_date), # date2solrstamp(get_date()),
         'year': year,
         'date': solr_date, # TODO: Why this date has to be 30 minutes in advance? This is based on ADSImportPipeline SolrAdapter
