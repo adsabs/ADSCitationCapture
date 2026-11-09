@@ -485,6 +485,20 @@ master_pipeline=> select bibcode,solr_processed,datalinks_processed,processed,st
 
     Currently, the only way to resend urls is to send all records to the broker. Urls are not currently handled by Master Pipeline.
 
+- HSSI data links:
+    - Records whose DOI is listed in the file set in `HSSI_LINKS_FILE` get a `DATA` link with sub type `HSSI` and the `DATA` property.
+    - The file has tab separated DOI and url columns. Repeat the DOI to add multiple urls.
+    - The file comes directly from HSSI, so it can list DOIs of software that has not been cited yet. These DOIs are ignored until a citation creates their record, which then gets its link without a resend.
+    - A configured file must exist, otherwise records cannot be sent. Replace it atomically (e.g., write a temporary file and `mv` it).
+    - In deployment, `bin/copy_hssi_files.sh` in the pipeline image validates the file and copies it from `/proj/` to `/app/logs/input/hssi/hssi_links.tsv` atomically, keeping the previous version as `hssi_links.previous.tsv`. Run it once before setting `HSSI_LINKS_FILE` to that path.
+    - After changing the file, resend the nonbib records of the DOIs that were added, changed or removed. To resend all the DOIs in the file:
+    ```
+    python3 run.py MAINTENANCE --resend-nonbib --doi $(cut -f1 /app/logs/input/hssi/hssi_links.tsv | sort -u)
+    ```
+    - Do not pass the file itself with `--doi <file>`: its first line is read as a header, so that DOI would be skipped.
+    - Only DOIs with a record get a link, so compare the number of records with links to the number of DOIs in the file that have a record, not to the size of the file. A DOI only matches if it is the one stored for the record (a concept DOI does not match a version DOI).
+    - The resolver service only adds or updates links, so when a DOI loses all its HSSI links, also delete the bibcode with the resolver's `/delete` endpoint before resending.
+
 - Reevaluate Records
     - Reevaluates all discarded records, or a subset of those records
     - Resends to Master if `REGISTERED`

@@ -17,6 +17,9 @@ ADS_WEBHOOK_AUTH_TOKEN = "This is a secret!"
 DOI_URL = "https://doi.org/"
 DATACITE_URL = "https://api.datacite.org/works/"
 ASCL_URL = "http://ascl.net/"
+# Absolute path of the file with HSSI data links (tab separated DOI and url columns).
+# When 'None', no HSSI data links are added to the records
+HSSI_LINKS_FILE = None
 
 ADS_API_TOKEN = "<secret>"
 ADS_API_URL = "https://ui.adsabs.harvard.edu/v1/"

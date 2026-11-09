@@ -24,6 +24,31 @@ logger = setup_logging(__name__, proj_home=proj_home,
 
 
 # =============================== FUNCTIONS ======================================= #
+_hssi_links = {'path': None, 'mtime': None, 'links': {}}
+
+def _get_hssi_urls(app, doi):
+    """
+    Return the HSSI urls for a DOI from the file in HSSI_LINKS_FILE (tab separated
+    DOI and url columns, repeat the DOI for multiple urls). The file is reloaded
+    when it changes. A missing file raises an exception instead of being treated as
+    having no links, which would remove the links from any record that gets sent.
+    """
+    path = app.conf.get('HSSI_LINKS_FILE')
+    if not path:
+        return []
+    mtime = os.path.getmtime(path)
+    if _hssi_links['path'] != path or _hssi_links['mtime'] != mtime:
+        links = {}
+        with open(path) as f:
+            for line in f:
+                columns = line.strip().split('\t')
+                if len(columns) == 2:
+                    links.setdefault(columns[0].lower(), set()).add(columns[1])
+                elif line.strip():
+                    logger.warning("Ignoring invalid line in '%s': %s", path, line.strip())
+        _hssi_links.update(path=path, mtime=mtime, links=links)
+    return sorted(_hssi_links['links'].get(doi.lower(), []))
+
 def build_record(app, citation_change, parsed_metadata, citations, db_versions, readers=[], entry_date=None):
     if citation_change.content_type != CitationChangeContentType.doi:
         raise ValueError("Only DOI records can be forwarded to master")
@@ -150,6 +175,9 @@ def build_record(app, citation_change, parsed_metadata, citations, db_versions, 
         record_dict['property'].append('ASSOCIATED')
     if is_release:
         record_dict['property'].append('RELEASE')
+    hssi_urls = _get_hssi_urls(app, doi)
+    if hssi_urls:
+        record_dict['property'].append('DATA')
 
     if record_dict["aff"] != ["-" for i in range(0, len(record_dict["aff"]))]:
         record_dict['orcid_pub'], record_dict['aff'] = extract_orcids_from_affs(record_dict['aff'])
@@ -159,11 +187,11 @@ def build_record(app, citation_change, parsed_metadata, citations, db_versions, 
         del record_dict['orcid_pub']
 
     record = DenormalizedRecord(**record_dict)
-    nonbib_record = _build_nonbib_record(app, citation_change, record, db_versions, status, readers=readers)
+    nonbib_record = _build_nonbib_record(app, citation_change, record, db_versions, status, readers=readers, hssi_urls=hssi_urls)
     return record, nonbib_record
 
 
-def _build_nonbib_record(app, citation_change, record, db_versions, status, readers=[]):
+def _build_nonbib_record(app, citation_change, record, db_versions, status, readers=[], hssi_urls=[]):
     doi = citation_change.content
     nonbib_record_dict = {
         'status': status,
@@ -187,6 +215,11 @@ def _build_nonbib_record(app, citation_change, record, db_versions, status, read
     if db_versions not in [{"":""}, {}, None]:
         nonbib_record_dict['data_links_rows'].append({'link_type': 'ASSOCIATED', 'link_sub_type': '', 
                      'url': db_versions.values(), 'title': db_versions.keys(), 'item_count':0})
+    if hssi_urls:
+        nonbib_record_dict['data'] = ['HSSI:{}'.format(len(hssi_urls))]
+        nonbib_record_dict['total_link_counts'] = len(hssi_urls)
+        nonbib_record_dict['data_links_rows'].append({'link_type': 'DATA', 'link_sub_type': 'HSSI',
+                     'url': hssi_urls, 'title': ['']*len(hssi_urls), 'item_count': len(hssi_urls)})
     nonbib_record = NonBibRecord(**nonbib_record_dict)
     nonbib_record.esource.extend(record.esources)
     nonbib_record.reference.extend(record.reference)
