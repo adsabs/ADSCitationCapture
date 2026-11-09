@@ -485,6 +485,16 @@ master_pipeline=> select bibcode,solr_processed,datalinks_processed,processed,st
 
     Currently, the only way to resend urls is to send all records to the broker. Urls are not currently handled by Master Pipeline.
 
+- HSSI data links:
+    - Records whose DOI is listed in the file set in `HSSI_LINKS_FILE` get a `DATA` link with sub type `HSSI` and the `DATA` property.
+    - The file has tab separated DOI and url columns. Repeat the DOI to add multiple urls.
+    - A configured file must exist, otherwise records cannot be sent. Replace it atomically (e.g., write a temporary file and `mv` it).
+    - After changing the file, resend the nonbib records of the DOIs that were added, changed or removed:
+    ```
+    python3 run.py MAINTENANCE --resend-nonbib --doi 10.5281/zenodo.840393
+    ```
+    - The resolver service only adds or updates links, so when a DOI loses all its HSSI links, also delete the bibcode with the resolver's `/delete` endpoint before resending.
+
 - Reevaluate Records
     - Reevaluates all discarded records, or a subset of those records
     - Resends to Master if `REGISTERED`
